@@ -5,6 +5,7 @@ import pickle
 import torch
 from torchvision import datasets, transforms
 
+from lenet import LeNet
 from model import SoftDecisionTree
 
 # Training settings
@@ -70,7 +71,8 @@ def save_result(acc):
     pickle.dump(acc, f)
     f.close()
 
-model = SoftDecisionTree(args)
+# model = SoftDecisionTree(args)
+model = LeNet(args)
 
 if args.cuda:
     model.cuda()
@@ -79,4 +81,4 @@ for epoch in range(1, args.epochs + 1):
     model.train_(train_loader, epoch)
     model.test_(test_loader, epoch)
 
-save_result(model)
+# save_result(model)
