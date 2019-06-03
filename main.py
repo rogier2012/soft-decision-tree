@@ -43,6 +43,8 @@ parser.add_argument('--temperature', type=int, default=1, metavar='N',
                     help='Temperature for softmax in LeNet, to be implemented')
 parser.add_argument('--beta', type=float, default=0.5, metavar='N',
                     help='Inverse temperature beta')
+parser.add_argument('--save-model', type=bool, default=False, metavar='N',
+                    help='Save the best model')
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()

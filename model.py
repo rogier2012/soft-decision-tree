@@ -225,7 +225,7 @@ class SoftDecisionTree(nn.Module):
             accuracy))
         self.test_acc.append(accuracy)
 
-        if accuracy > self.best_accuracy:
+        if self.args.save_model and  accuracy > self.best_accuracy:
             self.save_best('./result')
             self.best_accuracy = accuracy
 

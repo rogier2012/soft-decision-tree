@@ -80,7 +80,7 @@ class LeNet(nn.Module):
             accuracy))
         self.test_acc.append(accuracy)
 
-        if accuracy > self.best_accuracy:
+        if self.save_model and accuracy > self.best_accuracy:
             self.save_best('./result')
             self.best_accuracy = accuracy
 
