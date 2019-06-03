@@ -218,7 +218,7 @@ class DistilledSoftDecisionTree(nn.Module):
             _, output = self.cal_loss(data, self.target_onehot)
             pred = output.data.max(1)[1]  # get the index of the max log-probability
             correct += pred.eq(target.data).cpu().sum()
-        accuracy = 100. * correct / float(len(test_loader.dataset))
+        accuracy = 100. * correct.item() / float(len(test_loader.dataset))
         print('\nTest set: Accuracy: {}/{} ({:.4f}%)\n'.format(
             correct, len(test_loader.dataset),
             accuracy))

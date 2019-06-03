@@ -39,7 +39,7 @@ class LeNet(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
-        return F.softmax(x, dim=1)
+        return F.softmax(x/self.args.temperature, dim=1)
 
     def train_(self, train_loader, epoch):
         total_loss = 0.0

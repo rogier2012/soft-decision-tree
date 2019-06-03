@@ -33,17 +33,20 @@ parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
                     help='SGD momentum (default: 0.5)')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
-parser.add_argument('--seed', type=int, default=1, metavar='S',
-                    help='random seed (default: 1)')
+# parser.add_argument('--seed', type=int, default=1, metavar='S',
+#                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=40, metavar='N',
                     help='how many batches to wait before logging training status')
+parser.add_argument('--import-mode', type=bool, default=False, metavar='N',
+                    help='to import lenet and mnist soft targets')
+parser.add_argument('--temperature', type=int, default=1, metavar='N',
+                    help='Temperature for softmax in LeNet, to be implemented')
+parser.add_argument('--beta', type=float, default=0.5, metavar='N',
+                    help='Inverse temperature beta')
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-torch.manual_seed(args.seed)
-if args.cuda:
-    torch.cuda.manual_seed(args.seed)
 
 try:
     os.makedirs('./data')
@@ -52,7 +55,8 @@ except:
 
 kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 
-importMode = True
+importMode = args.import_mode
+print(importMode, args.lmbda)
 
 train_loader = torch.utils.data.DataLoader(
     datasets.MNIST('./data', train=True, download=True,
@@ -99,32 +103,6 @@ class SoftMNIST(datasets.MNIST):
         return self.init_target_transform(img)
 
 
-    # def __getitem__(self, index):
-    #     """
-    #     Args:
-    #         index (int): Index
-    #
-    #     Returns:
-    #         tuple: (image, target) where target is index of the target class.
-    #     """
-    #     if self.train:
-    #         img, target = self.train_data[index], self.train_labels[index]
-    #     else:
-    #         img, target = self.test_data[index], self.test_labels[index]
-    #
-    #     # doing this so that it is consistent with all other datasets
-    #     # to return a PIL Image
-    #     img = Image.fromarray(img.numpy(), mode='L')
-    #
-    #     if self.transform is not None:
-    #         img = self.transform(img)
-    #
-    #     if self.target_transform is not None:
-    #         target = self.target_transform(img)
-
-        # return img, target
-
-
 leNetModel = LeNet(args)
 
 if args.cuda:
@@ -137,6 +115,7 @@ if importMode:
 else:
     for epoch in range(1, args.epochs + 1):
         leNetModel.train_(train_loader, epoch)
+
 
 def get_soft_label(img):
     return leNetModel(img.view(1, *(img.size()))).view(-1)
@@ -174,13 +153,30 @@ test_loader = torch.utils.data.DataLoader(
     ])),
     batch_size=args.batch_size, shuffle=True, **kwargs)
 
-model = DistilledSoftDecisionTree(args)
+model = SoftDecisionTree(args)
 
 if args.cuda:
     model.cuda()
 
 for epoch in range(1, args.epochs + 1):
-    model.train_(soft_train_loader, epoch)
-    model.test_(test_loader, epoch)
+    model.train_(train_loader, epoch)
+
+
+dist_model = DistilledSoftDecisionTree(args)
+
+if args.cuda:
+    dist_model.cuda()
+
+# for epoch in range(1, args.epochs + 1):
+    # dist_model.train_(soft_train_loader, epoch)
+
+model.test_(test_loader, 1)
+# dist_model.test_(test_loader, 1)
+leNetModel.test_(test_loader, 1)
+print("\n --------- Best accuracy --------")
+print("LeNet: {:.4f}%".format(leNetModel.best_accuracy))
+print("SoftDecisionTree: {:.4f}%".format(model.best_accuracy))
+print("DistilledSoft: {:.4f}%".format(dist_model.best_accuracy))
+
 
 # save_result(model)
