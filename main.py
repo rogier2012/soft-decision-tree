@@ -3,8 +3,13 @@ import os
 import argparse
 import pickle
 import torch
+from torch.autograd import Variable
 from torchvision import datasets, transforms
+from PIL import Image
+import matplotlib.pyplot as plt
+import numpy as np
 
+from distilled_model import DistilledSoftDecisionTree
 from lenet import LeNet
 from model import SoftDecisionTree
 
@@ -30,7 +35,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+parser.add_argument('--log-interval', type=int, default=40, metavar='N',
                     help='how many batches to wait before logging training status')
 
 args = parser.parse_args()
@@ -47,19 +52,15 @@ except:
 
 kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 
+importMode = True
+
 train_loader = torch.utils.data.DataLoader(
     datasets.MNIST('./data', train=True, download=True,
                    transform=transforms.Compose([
                        transforms.ToTensor(),
                        transforms.Normalize((0.1307,), (0.3081,))
                    ])),
-    batch_size=args.batch_size, shuffle=True, **kwargs)
-test_loader = torch.utils.data.DataLoader(
-    datasets.MNIST('./data', train=False, transform=transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])),
-    batch_size=args.batch_size, shuffle=True, **kwargs)
+    batch_size=args.batch_size, shuffle=False, **kwargs)
 
 def save_result(acc):
     try:
@@ -71,14 +72,115 @@ def save_result(acc):
     pickle.dump(acc, f)
     f.close()
 
-# model = SoftDecisionTree(args)
-model = LeNet(args)
+
+class SoftMNIST(datasets.MNIST):
+
+
+    def __init__(self, root, import_targets=False, init_target_transform=None, train=True, transform=None, target_transform=None, download=False):
+        super().__init__(root, train, transform, target_transform, download)
+        self.init_target_transform = init_target_transform
+        if import_targets:
+            filename = os.path.join(root, 'soft_targets.pickle')
+            f = open(filename, 'rb')
+            self.train_labels = pickle.load(f)
+            f.close()
+        else:
+            self.train_labels = [self.get_soft_label(x) for x in self.train_data]
+            filename = os.path.join(root, 'soft_targets.pickle')
+            f = open(filename, 'wb')
+            pickle.dump(self.train_labels, f)
+            f.close()
+
+    def get_soft_label(self, img):
+        img = Image.fromarray(img.numpy(), mode='L')
+        if self.transform is not None:
+            img = self.transform(img)
+
+        return self.init_target_transform(img)
+
+
+    # def __getitem__(self, index):
+    #     """
+    #     Args:
+    #         index (int): Index
+    #
+    #     Returns:
+    #         tuple: (image, target) where target is index of the target class.
+    #     """
+    #     if self.train:
+    #         img, target = self.train_data[index], self.train_labels[index]
+    #     else:
+    #         img, target = self.test_data[index], self.test_labels[index]
+    #
+    #     # doing this so that it is consistent with all other datasets
+    #     # to return a PIL Image
+    #     img = Image.fromarray(img.numpy(), mode='L')
+    #
+    #     if self.transform is not None:
+    #         img = self.transform(img)
+    #
+    #     if self.target_transform is not None:
+    #         target = self.target_transform(img)
+
+        # return img, target
+
+
+leNetModel = LeNet(args)
+
+if args.cuda:
+    leNetModel.cuda()
+
+soft_labels = []
+
+if importMode:
+    leNetModel.load_state_dict(torch.load(os.path.join('./result', 'lenet5_best.json')))
+else:
+    for epoch in range(1, args.epochs + 1):
+        leNetModel.train_(train_loader, epoch)
+
+def get_soft_label(img):
+    return leNetModel(img.view(1, *(img.size()))).view(-1)
+
+
+soft_train_loader = torch.utils.data.DataLoader(
+    SoftMNIST('./data',import_targets=importMode, train=True,
+                   transform=transforms.Compose([
+                       transforms.ToTensor(),
+                       transforms.Normalize((0.1307,), (0.3081,))
+                   ]), init_target_transform=get_soft_label),
+    batch_size=args.batch_size, **kwargs)
+
+def show(data_loader):
+
+    images, foo = next(iter(data_loader))
+    print(foo)
+    from torchvision.utils import make_grid
+    npimg = make_grid(images, normalize=True, pad_value=.5).numpy()
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=((13, 5)))
+    import numpy as np
+    ax.imshow(np.transpose(npimg, (1, 2, 0)))
+    plt.setp(ax, xticks=[], yticks=[])
+
+    return fig, ax
+# fig, ax = show(soft_train_loader)
+# plt.show()
+# exit()
+
+test_loader = torch.utils.data.DataLoader(
+    datasets.MNIST('./data', train=False, transform=transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])),
+    batch_size=args.batch_size, shuffle=True, **kwargs)
+
+model = DistilledSoftDecisionTree(args)
 
 if args.cuda:
     model.cuda()
 
 for epoch in range(1, args.epochs + 1):
-    model.train_(train_loader, epoch)
+    model.train_(soft_train_loader, epoch)
     model.test_(test_loader, epoch)
 
 # save_result(model)

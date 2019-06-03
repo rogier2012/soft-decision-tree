@@ -20,6 +20,7 @@ class LeNet(nn.Module):
         self.apply(self.weight_init)
         self.test_acc = []
         self.best_accuracy = 0.0
+        self.soft_targets = []
 
     def weight_init(self, m):
         if isinstance(m, nn.Conv2d):
@@ -28,31 +29,29 @@ class LeNet(nn.Module):
             m.weight.data.normal_(0, math.sqrt(2. / n))
 
     def forward(self, x):
-        features = []
         # Max pooling over a (2, 2) window
+        # print(x.shape)
         x = F.relu(self.conv1(x))
-        features.append(x)  # C1
         x = F.max_pool2d(x, 2)
         x = F.relu(self.conv2(x))
-        features.append(x)  # C3
         x = F.max_pool2d(x, 2)
-        features.append(x)  # S4
         x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
-        return x, features
+        return F.softmax(x, dim=1)
 
     def train_(self, train_loader, epoch):
         total_loss = 0.0
         for batch_idx, (data, target) in enumerate(train_loader):
+            # print(data.shape)
             if self.args.cuda:
                 data, target = data.cuda(), target.cuda()
             # zero the parameter gradients
             self.optimizer.zero_grad()
 
             # forward + backward + optimize
-            output = self(data)[0]
+            output = self(data)
             loss = self.criterion(output, target)
             loss.backward()
             self.optimizer.step()
@@ -70,7 +69,7 @@ class LeNet(nn.Module):
             for data, target in test_loader:
                 if self.args.cuda:
                     data, target = data.cuda(), target.cuda()
-                output = self(data)[0]
+                output = self(data)
                 # sum up batch loss
                 # get the index of the max log-probability
                 predict = output.data.max(1, keepdim=True)[1]
@@ -85,21 +84,27 @@ class LeNet(nn.Module):
             self.save_best('./result')
             self.best_accuracy = accuracy
 
-    def make_soft_labels(self, test_loader):
+    def make_soft_labels(self, train_loader):
         correct = 0
         with torch.no_grad():
-            for data, target in test_loader:
+            for data, target in train_loader:
                 if self.args.cuda:
                     data, target = data.cuda(), target.cuda()
-                output = self(data)[0]
+                output = self(data)
+
                 # sum up batch loss
                 # get the index of the max log-probability
                 predict = output.data.max(1, keepdim=True)[1]
                 correct += predict.eq(target.data.view_as(predict)).sum().item()
 
-        accuracy = 100.0 * correct / len(test_loader.dataset)
+        accuracy = 100.0 * correct / len(train_loader.dataset)
         print('\nTest Accuracy: {:.2f}%\n'.format(
             accuracy))
+
+        if accuracy > self.best_accuracy:
+            self.best_accuracy = accuracy
+
+
 
     def save_best(self, path):
         try:
