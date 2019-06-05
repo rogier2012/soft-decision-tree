@@ -39,7 +39,18 @@ class LeNet(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
-        return F.softmax(x/self.args.temperature, dim=1)
+        return F.softmax(x, dim=1)
+
+    def forward_with_temperature(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.max_pool2d(x, 2)
+        x = F.relu(self.conv2(x))
+        x = F.max_pool2d(x, 2)
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return F.softmax(x / self.args.temperature, dim=1)
 
     def train_(self, train_loader, epoch):
         total_loss = 0.0
@@ -80,8 +91,9 @@ class LeNet(nn.Module):
             accuracy))
         self.test_acc.append(accuracy)
 
-        if self.save_model and accuracy > self.best_accuracy:
-            self.save_best('./result')
+        if accuracy > self.best_accuracy:
+            if self.args.save_model:
+                self.save_best('./result')
             self.best_accuracy = accuracy
 
     def make_soft_labels(self, train_loader):

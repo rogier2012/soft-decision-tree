@@ -39,7 +39,7 @@ parser.add_argument('--log-interval', type=int, default=40, metavar='N',
                     help='how many batches to wait before logging training status')
 parser.add_argument('--import-mode', type=bool, default=False, metavar='N',
                     help='to import lenet and mnist soft targets')
-parser.add_argument('--temperature', type=int, default=1, metavar='N',
+parser.add_argument('--temperature', type=int, default=20, metavar='N',
                     help='Temperature for softmax in LeNet, to be implemented')
 parser.add_argument('--beta', type=float, default=0.5, metavar='N',
                     help='Inverse temperature beta')
@@ -101,7 +101,6 @@ class SoftMNIST(datasets.MNIST):
         img = Image.fromarray(img.numpy(), mode='L')
         if self.transform is not None:
             img = self.transform(img)
-
         return self.init_target_transform(img)
 
 
@@ -120,11 +119,11 @@ else:
 
 
 def get_soft_label(img):
-    return leNetModel(img.view(1, *(img.size()))).view(-1)
+    return leNetModel.forward_with_temperature(img.view(1, *(img.size()))).view(-1)
 
 
 soft_train_loader = torch.utils.data.DataLoader(
-    SoftMNIST('./data',import_targets=importMode, train=True,
+    SoftMNIST('./data', import_targets=True, train=True,
                    transform=transforms.Compose([
                        transforms.ToTensor(),
                        transforms.Normalize((0.1307,), (0.3081,))
@@ -132,7 +131,6 @@ soft_train_loader = torch.utils.data.DataLoader(
     batch_size=args.batch_size, **kwargs)
 
 def show(data_loader):
-
     images, foo = next(iter(data_loader))
     print(foo)
     from torchvision.utils import make_grid
@@ -144,9 +142,6 @@ def show(data_loader):
     plt.setp(ax, xticks=[], yticks=[])
 
     return fig, ax
-# fig, ax = show(soft_train_loader)
-# plt.show()
-# exit()
 
 test_loader = torch.utils.data.DataLoader(
     datasets.MNIST('./data', train=False, transform=transforms.Compose([
@@ -160,8 +155,8 @@ model = SoftDecisionTree(args)
 if args.cuda:
     model.cuda()
 
-for epoch in range(1, args.epochs + 1):
-    model.train_(train_loader, epoch)
+# for epoch in range(1, args.epochs + 1):
+#     model.train_(train_loader, epoch)
 
 
 dist_model = DistilledSoftDecisionTree(args)
@@ -169,16 +164,18 @@ dist_model = DistilledSoftDecisionTree(args)
 if args.cuda:
     dist_model.cuda()
 
-# for epoch in range(1, args.epochs + 1):
-    # dist_model.train_(soft_train_loader, epoch)
+for epoch in range(1, args.epochs + 1):
+    dist_model.train_(soft_train_loader, epoch)
 
-model.test_(test_loader, 1)
-# dist_model.test_(test_loader, 1)
+# model.test_(test_loader, 1)
+dist_model.test_(test_loader, 1)
 leNetModel.test_(test_loader, 1)
 print("\n --------- Best accuracy --------")
 print("LeNet: {:.4f}%".format(leNetModel.best_accuracy))
 print("SoftDecisionTree: {:.4f}%".format(model.best_accuracy))
 print("DistilledSoft: {:.4f}%".format(dist_model.best_accuracy))
 
-
+fig, ax = show(soft_train_loader)
+plt.show()
+exit()
 # save_result(model)
